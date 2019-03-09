@@ -65,6 +65,7 @@ public class RegistrationAppStartTests {
 
 	@Test
 	public void testUserAlreadyRegisteredRegistrationResponse() {
+        userRegistrationRequest.setUserName("bganilkumar5");
 		HttpEntity<UserRegistrationRequest> userRegistrationRequestHttpEntity = new HttpEntity<>(userRegistrationRequest, httpHeaders);
 		Mockito.when(exclusionService.validate(Mockito.anyString(), Mockito.anyString())).thenReturn(true);
 		ResponseEntity<UserRegistrationResponse> responseEntity = restTemplate.exchange("http://localhost:"+port+"/user/registration/register",

@@ -15,7 +15,6 @@ import org.springframework.http.*;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -50,11 +49,32 @@ public class RegistrationAppStartTests {
 				HttpMethod.POST, userRegistrationRequestHttpEntity, UserRegistrationResponse.class);
 		assertEquals(HttpStatus.CREATED, responseEntity.getStatusCode());
 		UserRegistrationResponse response = responseEntity.getBody();
-		assertEquals("User:bganilkumar4 has been successfully registered.", response.getMessage());
+		assertEquals("User:"+userRegistrationRequest.getUserName()+" has been successfully registered.", response.getMessage());
 	}
 
 	@Test
-	public void contextLoads() {
+	public void testBlackListedRegistrationResponse() {
+		HttpEntity<UserRegistrationRequest> userRegistrationRequestHttpEntity = new HttpEntity<>(userRegistrationRequest, httpHeaders);
+		Mockito.when(exclusionService.validate(Mockito.anyString(), Mockito.anyString())).thenReturn(false);
+		ResponseEntity<UserRegistrationResponse> responseEntity = restTemplate.exchange("http://localhost:"+port+"/user/registration/register",
+				HttpMethod.POST, userRegistrationRequestHttpEntity, UserRegistrationResponse.class);
+		assertEquals(HttpStatus.FORBIDDEN, responseEntity.getStatusCode());
+		UserRegistrationResponse response = responseEntity.getBody();
+		assertEquals("User:" + userRegistrationRequest.getUserName() + " has been blacklisted. Can't proceed with the registration.", response.getMessage());
+	}
+
+	@Test
+	public void testUserAlreadyRegisteredRegistrationResponse() {
+		HttpEntity<UserRegistrationRequest> userRegistrationRequestHttpEntity = new HttpEntity<>(userRegistrationRequest, httpHeaders);
+		Mockito.when(exclusionService.validate(Mockito.anyString(), Mockito.anyString())).thenReturn(true);
+		ResponseEntity<UserRegistrationResponse> responseEntity = restTemplate.exchange("http://localhost:"+port+"/user/registration/register",
+				HttpMethod.POST, userRegistrationRequestHttpEntity, UserRegistrationResponse.class);
+		assertEquals(HttpStatus.CREATED, responseEntity.getStatusCode());
+		responseEntity = restTemplate.exchange("http://localhost:"+port+"/user/registration/register",
+				HttpMethod.POST, userRegistrationRequestHttpEntity, UserRegistrationResponse.class);
+		assertEquals(HttpStatus.CONFLICT, responseEntity.getStatusCode());
+		UserRegistrationResponse response = responseEntity.getBody();
+		assertEquals("User:" + userRegistrationRequest.getUserName()+ " has been already registered.", response.getMessage());
 	}
 
 }

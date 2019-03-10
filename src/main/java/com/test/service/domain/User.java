@@ -1,10 +1,9 @@
 package com.test.service.domain;
 
-import lombok.Setter;
 import lombok.Getter;
+import lombok.Setter;
 
 import javax.persistence.*;
-import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -35,7 +34,7 @@ public class User {
     @Column(name="registered_date_time")
     private LocalDateTime registeredDateTime;
 
-    public User(){};
+    public User(){}
 
     public User(String userName, String password, LocalDate dateOfBirth, String ssn) {
         this.userName = userName;

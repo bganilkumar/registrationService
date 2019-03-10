@@ -1,11 +1,9 @@
 package com.test.service.user.response;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonSetter;
 import com.google.common.collect.Maps;
-import lombok.Setter;
 import lombok.Getter;
+import lombok.Setter;
 import org.springframework.http.HttpStatus;
 
 import java.util.Map;

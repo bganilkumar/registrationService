@@ -11,7 +11,6 @@ import com.test.service.user.response.UserRegistrationResponse;
 import com.test.service.validation.UserInputValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCrypt;
@@ -21,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import javax.validation.ConstraintViolationException;
 import java.time.LocalDate;
 import java.util.Optional;
 
@@ -46,12 +46,6 @@ public class RegistrationService {
     private UserRepository userRepository;
 
     /**
-     * boolean to consider only userId for registration validation.
-     */
-    @Value("${user.registration.validation.userIdOnly}")
-    private Boolean verifyOnlyUserId;
-
-    /**
      * exclusion service to validate the blacklisted user.
      */
     @Resource
@@ -71,21 +65,29 @@ public class RegistrationService {
     public ResponseEntity<UserRegistrationResponse> register(@RequestBody UserRegistrationRequest userRegistrationRequest)
             throws InvalidUserInputException, UserAlreadyRegisteredException, UserBlacklistedException {
         logger.info("User Registration details received.");
-
         logger.debug("Validating the data...");
         userInputValidator.validateUserInput(userRegistrationRequest);
         logger.debug("User validation successful.");
-
-        if (!userExclusionService.validate(userRegistrationRequest.getDateOfBirth(), userRegistrationRequest.getSsn())) {
-            throw new UserBlacklistedException("User:" + userRegistrationRequest.getUserName() + " has been blacklisted. Can't proceed with the registration.");
-        }
+        isUserBlacklisted(userRegistrationRequest);
         logger.debug("User is not blacklisted");
         isUserAlreadyRegistered(userRegistrationRequest);
         logger.debug("User is being registered...");
-        userRepository.save(new User(userRegistrationRequest.getUserName(), BCrypt.hashpw(userRegistrationRequest.getPassword(), BCrypt.gensalt()),
-                LocalDate.parse(userRegistrationRequest.getDateOfBirth()), userRegistrationRequest.getSsn()));
+        saveUser(userRegistrationRequest);
         logger.info("User has been successfully registered...");
         return new ResponseEntity<>(createSuccessResponse(userRegistrationRequest.getUserName()), HttpStatus.CREATED);
+    }
+
+    /**
+     * verifies whether the user is blacklisted. If so, throws {@link UserBlacklistedException}
+     *
+     * @param userRegistrationRequest
+     * @throws UserBlacklistedException
+     */
+    private void isUserBlacklisted(UserRegistrationRequest userRegistrationRequest) throws UserBlacklistedException {
+        if (!userExclusionService.validate(userRegistrationRequest.getDateOfBirth(), userRegistrationRequest.getSsn())) {
+            logger.info("User:" + userRegistrationRequest.getUserName()+ " has been blacklisted.");
+            throw new UserBlacklistedException("User:" + userRegistrationRequest.getUserName() + " has been blacklisted. Can't proceed with the registration.");
+        }
     }
 
     /**
@@ -103,22 +105,44 @@ public class RegistrationService {
 
     /**
      * Validates if the user is already present.
-     * If present
-     *      when {@code verifyOnlyUserId} is true --> throws UserAlreadyRegisteredException
-     *      when {@code verifyOnlyUserId} is false, verifies date of birth and ssn of the user. --> throws UserAlreadyRegisteredException if all matchees.
+     * If present throws UserAlreadyRegisteredException
+     *
      * @param userRegistrationRequest
      * @throws UserAlreadyRegisteredException
      */
     private void isUserAlreadyRegistered(UserRegistrationRequest userRegistrationRequest) throws UserAlreadyRegisteredException {
         Optional<User> user = userRepository.findByUserName(userRegistrationRequest.getUserName());
         if (user.isPresent()) {
-            if (verifyOnlyUserId) {
-                throw new UserAlreadyRegisteredException("User:" + userRegistrationRequest.getUserName()+ " has been already registered.");
-            } else if(user.get().getDateOfBirth().isEqual(LocalDate.parse(userRegistrationRequest.getDateOfBirth()))
-                    && user.get().getSsn().equals(userRegistrationRequest.getSsn())) {
-                throw new UserAlreadyRegisteredException("User:" + userRegistrationRequest.getUserName()+ " has been already registered.");
-            }
+            throwUserAlreadyRegisteredException(userRegistrationRequest);
         }
     }
+
+    /**
+     * save user to the repo for registration. If user already exists, throws {@link UserAlreadyRegisteredException}
+     * parallel requests might behave unexpectedly while verifying the user already exists.
+     *
+     * @param userRegistrationRequest
+     * @throws UserAlreadyRegisteredException
+     */
+    private void saveUser(UserRegistrationRequest userRegistrationRequest) throws UserAlreadyRegisteredException {
+        try {
+            userRepository.save(new User(userRegistrationRequest.getUserName(), BCrypt.hashpw(userRegistrationRequest.getPassword(), BCrypt.gensalt()),
+                    LocalDate.parse(userRegistrationRequest.getDateOfBirth()), userRegistrationRequest.getSsn()));
+        } catch (ConstraintViolationException ce) {
+            logger.error("User:" + userRegistrationRequest.getUserName() + " has already been registered.", ce);
+            throwUserAlreadyRegisteredException(userRegistrationRequest);
+        }
+    }
+
+    /**
+     * throw {@link UserAlreadyRegisteredException}.
+     *
+     * @param userRegistrationRequest
+     * @throws UserAlreadyRegisteredException
+     */
+    private void throwUserAlreadyRegisteredException(UserRegistrationRequest userRegistrationRequest) throws UserAlreadyRegisteredException {
+        throw new UserAlreadyRegisteredException("User:" + userRegistrationRequest.getUserName()+ " has been already registered.");
+    }
+
 
 }
